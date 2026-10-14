@@ -1,4 +1,4 @@
-# tv.lab.local: "/" -> player page, "/live" and "/vod" -> edge cache
+# tv.lab.local: "/" -> player page, "/live" and "/vod" -> edge cache, "/admin" -> LabTV Studio
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -14,6 +14,13 @@ spec:
             backend:
               service:
                 name: ott-edge
+                port:
+                  name: http
+          - path: /admin
+            pathType: Prefix
+            backend:
+              service:
+                name: ott-admin
                 port:
                   name: http
           - path: /vod
