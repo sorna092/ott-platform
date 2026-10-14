@@ -11,6 +11,7 @@ resources:
   - ingress.yaml
   - networkpolicy.yaml
   - vod-store.yaml
+  - admin.yaml
 
 # ConfigMaps built from files. Kustomize adds a content hash to each name,
 # so editing a file automatically rolls out the pods that use it.
