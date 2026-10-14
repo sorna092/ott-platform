@@ -1,0 +1,148 @@
+# LabTV Studio: admin panel (upload, transcode jobs, library)
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ott-admin
+---
+# Least privilege: only what the panel needs, only in namespace "ott"
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ott-admin
+rules:
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["create", "get", "list", "delete"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ott-admin
+subjects:
+  - kind: ServiceAccount
+    name: ott-admin
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: ott-admin
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ott-admin
+  labels:
+    app: ott-admin
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate            # shares the RWO VOD volume
+  selector:
+    matchLabels:
+      app: ott-admin
+  template:
+    metadata:
+      labels:
+        app: ott-admin
+    spec:
+      serviceAccountName: ott-admin
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101          # same uid as vod-store, so files stay readable
+        runAsGroup: 101
+        fsGroup: 101
+        seccompProfile:
+          type: RuntimeDefault
+      affinity:
+        podAffinity:            # RWO volume: must run on the vod-store node
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: vod-store
+              topologyKey: kubernetes.io/hostname
+      containers:
+        - name: admin
+          image: sorna724/ott-admin:1.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: TRANSCODER_IMAGE
+              value: sorna724/ott-transcoder:1.0
+            - name: MAX_UPLOAD_MB
+              value: "8192"
+            - name: ADMIN_USER
+              valueFrom:
+                secretKeyRef:
+                  name: ott-admin-auth     # created by hand, never stored in Git
+                  key: username
+            - name: ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ott-admin-auth
+                  key: password
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              memory: 256Mi
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 20
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: vod-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ott-admin
+  labels:
+    app: ott-admin
+spec:
+  selector:
+    app: ott-admin
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ott-admin-from-traefik-only
+spec:
+  podSelector:
+    matchLabels:
+      app: ott-admin
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: traefik
+      ports:
+        - port: 8080

@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LabTV Studio</title>
+<style>
+  :root {
+    --bg: #0b0f17; --panel: #131a26; --line: #222c3d; --text: #e8edf5;
+    --muted: #93a1b8; --accent: #e5484d; --accent2: #2dd4bf; --warn: #f5a524; --ok: #3fb950;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font-family: "Segoe UI", system-ui, -apple-system, sans-serif; }
+  header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between;
+           padding: 14px 24px; border-bottom: 1px solid var(--line); background: #0e131d; }
+  .logo { font-size: 22px; font-weight: 800; }
+  .logo span { color: var(--accent); }
+  .logo small { font-size: 13px; font-weight: 600; color: var(--accent2); margin-left: 8px;
+                letter-spacing: 1.5px; text-transform: uppercase; }
+  header a { color: var(--accent2); text-decoration: none; font-size: 14px; }
+  header a:hover { text-decoration: underline; }
+  main { max-width: 1200px; margin: 0 auto; padding: 20px 24px; display: grid; gap: 20px;
+         grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px; }
+  .wide { grid-column: 1 / -1; }
+  h2 { margin: 0 0 14px; font-size: 13px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); }
+  label { display: block; font-size: 13px; color: var(--muted); margin: 12px 0 6px; }
+  input[type=text] { width: 100%; padding: 11px 12px; border-radius: 8px; border: 1px solid var(--line);
+                     background: #0e131d; color: var(--text); font: inherit; }
+  input[type=text]:focus { outline: 2px solid var(--accent2); outline-offset: 1px; }
+  .drop { margin-top: 12px; border: 2px dashed #34476a; border-radius: 10px; padding: 22px; text-align: center;
+          color: var(--muted); cursor: pointer; }
+  .drop.over { border-color: var(--accent2); color: var(--text); }
+  .drop b { color: var(--text); }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  button { font: inherit; cursor: pointer; border-radius: 8px; border: 1px solid var(--line);
+           background: #1d2636; color: var(--text); padding: 10px 16px; min-height: 44px; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; width: 100%; margin-top: 16px; }
+  button.primary:disabled { opacity: .5; cursor: not-allowed; }
+  button.danger { color: #ffb4b6; border-color: #5a2a2d; }
+  .bar { height: 10px; background: #0e131d; border-radius: 6px; overflow: hidden; margin-top: 14px; border: 1px solid var(--line); }
+  .bar div { height: 100%; width: 0%; background: var(--accent2); transition: width .2s; }
+  .msg { margin-top: 10px; font-size: 14px; min-height: 20px; }
+  .msg.err { color: #ff8a8e; } .msg.ok { color: var(--ok); }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 9px 6px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; }
+  .state { font-weight: 700; font-size: 12px; padding: 3px 8px; border-radius: 4px; }
+  .Running { background: #3b2f0b; color: var(--warn); }
+  .Pending { background: #1d2636; color: var(--muted); }
+  .Succeeded { background: #10301a; color: var(--ok); }
+  .Failed { background: #3a1416; color: #ff8a8e; }
+  pre { background: #05080d; border: 1px solid var(--line); border-radius: 8px; padding: 12px; margin: 12px 0 0;
+        font: 12px/1.5 ui-monospace, Consolas, monospace; color: #c9d4e5; max-height: 260px; overflow: auto; white-space: pre-wrap; }
+  .lib { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; }
+  .movie { background: #0e131d; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .movie img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; display: block; background: #1d2636; }
+  .movie .body { padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+  .movie b { font-size: 14px; }
+  .movie small { color: var(--muted); }
+  .row { display: flex; gap: 8px; }
+  .row a, .row button { flex: 1; text-align: center; font-size: 13px; padding: 8px; min-height: 44px; }
+  .row a { color: var(--text); background: #1d2636; border: 1px solid var(--line); border-radius: 8px;
+           text-decoration: none; display: grid; place-items: center; }
+  .empty { color: var(--muted); font-size: 14px; }
+  .linkbtn { background: none; border: none; color: var(--accent2); padding: 0; min-height: 0; text-decoration: underline; }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">Lab<span>TV</span><small>Studio</small></div>
+  <a href="/" target="_blank" rel="noopener">Open LabTV ↗</a>
+</header>
+
+<main>
+  <section class="card">
+    <h2>Upload a movie</h2>
+    <form id="form" novalidate>
+      <label for="title">Title</label>
+      <input type="text" id="title" required maxlength="100" placeholder="e.g. Sintel">
+
+      <label for="mid">Movie ID (used in the URL)</label>
+      <input type="text" id="mid" required maxlength="40" pattern="[a-z0-9-]{1,40}" placeholder="e.g. sintel">
+      <div class="hint">Lowercase letters, numbers and dashes. Created from the title automatically.</div>
+
+      <label for="file">Video file</label>
+      <div class="drop" id="drop"><b>Drop a video here</b> or click to choose<br><small id="fname">MP4, MKV or MOV</small></div>
+      <input type="file" id="file" accept="video/*" hidden>
+
+      <button class="primary" id="go" type="submit">Upload &amp; transcode</button>
+      <div class="bar" aria-hidden="true"><div id="bar"></div></div>
+      <div class="msg" id="msg" role="status"></div>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2>Transcode jobs</h2>
+    <table>
+      <thead><tr><th>Movie</th><th>Status</th><th>Started</th><th>Log</th></tr></thead>
+      <tbody id="jobs"><tr><td colspan="4" class="empty">Loading…</td></tr></tbody>
+    </table>
+    <pre id="log" hidden></pre>
+  </section>
+
+  <section class="card wide">
+    <h2>Library</h2>
+    <div class="lib" id="lib"><p class="empty">Loading…</p></div>
+  </section>
+</main>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const titleEl = $('title'), idEl = $('mid'), fileEl = $('file'), drop = $('drop');
+  let idTouched = false, logFor = null, chosen = null;
+
+  const slug = (s) => s.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
+  titleEl.addEventListener('input', () => { if (!idTouched) idEl.value = slug(titleEl.value); });
+  idEl.addEventListener('input', () => { idTouched = true; });
+
+  function choose(f) {
+    chosen = f;
+    $('fname').textContent = f ? f.name + ' · ' + (f.size / 1048576).toFixed(1) + ' MB' : 'MP4, MKV or MOV';
+  }
+  drop.addEventListener('click', () => fileEl.click());
+  fileEl.addEventListener('change', () => choose(fileEl.files[0]));
+  drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.classList.add('over'); });
+  drop.addEventListener('dragleave', () => drop.classList.remove('over'));
+  drop.addEventListener('drop', (e) => { e.preventDefault(); drop.classList.remove('over'); if (e.dataTransfer.files[0]) choose(e.dataTransfer.files[0]); });
+
+  function say(text, cls) { const m = $('msg'); m.textContent = text; m.className = 'msg ' + (cls || ''); }
+
+  $('form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const title = titleEl.value.trim(), id = idEl.value.trim();
+    if (!title) return say('Please enter a title.', 'err');
+    if (!/^[a-z0-9-]{1,40}$/.test(id)) return say('Movie ID: lowercase letters, numbers and dashes only.', 'err');
+    if (!chosen) return say('Please choose a video file.', 'err');
+
+    const fd = new FormData();          // id and title must come BEFORE the file
+    fd.append('id', id);
+    fd.append('title', title);
+    fd.append('file', chosen);
+
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', 'api/upload');
+    $('go').disabled = true;
+    xhr.upload.onprogress = (ev) => {
+      if (ev.lengthComputable) {
+        const pct = Math.round(ev.loaded * 100 / ev.total);
+        $('bar').style.width = pct + '%';
+        say('Uploading… ' + pct + '%');
+      }
+    };
+    xhr.onload = () => {
+      $('go').disabled = false;
+      let res = {};
+      try { res = JSON.parse(xhr.responseText); } catch (_) {}
+      if (xhr.status === 202) {
+        say('Uploaded. Transcoding started (job ' + res.job + ').', 'ok');
+        logFor = id; refreshJobs();
+        titleEl.value = ''; idEl.value = ''; idTouched = false; choose(null); fileEl.value = '';
+      } else {
+        say(res.error || ('Upload failed (HTTP ' + xhr.status + ').'), 'err');
+      }
+      setTimeout(() => { $('bar').style.width = '0%'; }, 1500);
+    };
+    xhr.onerror = () => { $('go').disabled = false; say('Network error during upload.', 'err'); };
+    xhr.send(fd);
+  });
+
+  async function refreshJobs() {
+    try {
+      const r = await fetch('api/jobs', { cache: 'no-store' });
+      const jobs = await r.json();
+      const tb = $('jobs'); tb.innerHTML = '';
+      if (!Array.isArray(jobs) || !jobs.length) {
+        tb.innerHTML = '<tr><td colspan="4" class="empty">No jobs in the last hour.</td></tr>';
+      } else {
+        jobs.forEach((j) => {
+          const tr = document.createElement('tr');
+          const c1 = document.createElement('td'); c1.textContent = j.movie;
+          const c2 = document.createElement('td'); const s = document.createElement('span');
+          s.className = 'state ' + j.state; s.textContent = j.state; c2.appendChild(s);
+          const c3 = document.createElement('td'); c3.textContent = j.started ? new Date(j.started).toLocaleTimeString() : '';
+          const c4 = document.createElement('td'); const b = document.createElement('button');
+          b.className = 'linkbtn'; b.type = 'button'; b.textContent = 'view';
+          b.addEventListener('click', () => { logFor = j.movie; refreshLog(); });
+          c4.appendChild(b);
+          tr.append(c1, c2, c3, c4); tb.appendChild(tr);
+          if (j.state === 'Succeeded' && !seenDone[j.movie]) { seenDone[j.movie] = true; refreshLib(); }
+        });
+      }
+    } catch (_) {}
+    refreshLog();
+  }
+  const seenDone = {};
+
+  async function refreshLog() {
+    const pre = $('log');
+    if (!logFor) { pre.hidden = true; return; }
+    try {
+      const r = await fetch('api/jobs/' + encodeURIComponent(logFor) + '/log', { cache: 'no-store' });
+      const d = await r.json();
+      pre.hidden = false;
+      pre.textContent = '— ' + logFor + ' —\n' + (d.log || d.error || '');
+      pre.scrollTop = pre.scrollHeight;
+    } catch (_) {}
+  }
+
+  async function refreshLib() {
+    try {
+      const r = await fetch('api/movies', { cache: 'no-store' });
+      const movies = await r.json();
+      const lib = $('lib'); lib.innerHTML = '';
+      if (!movies.length) { lib.innerHTML = '<p class="empty">No movies yet. Upload your first one.</p>'; return; }
+      movies.forEach((m) => {
+        const card = document.createElement('div'); card.className = 'movie';
+        const img = document.createElement('img'); img.src = m.poster + '?t=' + encodeURIComponent(m.added || '');
+        img.alt = m.title + ' poster'; img.loading = 'lazy';
+        const body = document.createElement('div'); body.className = 'body';
+        const t = document.createElement('b'); t.textContent = m.title;
+        const meta = document.createElement('small');
+        meta.textContent = Math.max(1, Math.round((m.duration || 0) / 60)) + ' min · ' + m.id;
+        const row = document.createElement('div'); row.className = 'row';
+        const watch = document.createElement('a'); watch.href = '/'; watch.target = '_blank'; watch.rel = 'noopener'; watch.textContent = 'Watch';
+        const del = document.createElement('button'); del.className = 'danger'; del.type = 'button'; del.textContent = 'Delete';
+        del.addEventListener('click', async () => {
+          if (!confirm('Delete "' + m.title + '"? This removes all its video files.')) return;
+          const r = await fetch('api/movies/' + encodeURIComponent(m.id), { method: 'DELETE' });
+          if (!r.ok) { alert('Delete failed'); return; }
+          refreshLib();
+        });
+        row.append(watch, del);
+        body.append(t, meta, row);
+        card.append(img, body); lib.appendChild(card);
+      });
+    } catch (_) {}
+  }
+
+  refreshJobs(); refreshLib();
+  setInterval(refreshJobs, 3000);
+</script>
+</body>
+</html>
