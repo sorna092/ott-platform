@@ -1,0 +1,23 @@
+[
+  {
+    "id": "live",
+    "name": "Live Test",
+    "category": "Live",
+    "description": "Public live HLS test stream.",
+    "url": "/live/live/index.m3u8"
+  },
+  {
+    "id": "bunny",
+    "name": "Big Buck Bunny",
+    "category": "Movies",
+    "description": "Open movie by the Blender Foundation, looped as a 24/7 channel.",
+    "url": "/live/bunny/index.m3u8"
+  },
+  {
+    "id": "tears",
+    "name": "Tears of Steel",
+    "category": "Sci-Fi",
+    "description": "Open movie by the Blender Foundation, looped as a 24/7 channel.",
+    "url": "/live/tears/index.m3u8"
+  }
+]

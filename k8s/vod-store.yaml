@@ -1,0 +1,113 @@
+# VOD storage + origin: one Longhorn volume (3 replicas) served by nginx
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: vod-data
+spec:
+  accessModes: ["ReadWriteOnce"]
+  storageClassName: longhorn
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vod-store
+  labels:
+    app: vod-store
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate          # RWO volume: never two copies at once
+  selector:
+    matchLabels:
+      app: vod-store
+  template:
+    metadata:
+      labels:
+        app: vod-store
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
+        fsGroup: 101        # volume becomes writable for uid/gid 101
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: init-dirs
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - mkdir -p /data/vod /data/uploads /data/tmp; [ -f /data/vod/catalog.json ] || echo '[]' > /data/vod/catalog.json
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      containers:
+        - name: nginx
+          image: nginxinc/nginx-unprivileged:1.27-alpine
+          ports:
+            - name: http
+              containerPort: 8080
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 5
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: vod-conf
+              mountPath: /etc/nginx/conf.d
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: vod-data
+        - name: vod-conf
+          configMap:
+            name: vod-conf
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vod-store
+  labels:
+    app: vod-store
+spec:
+  selector:
+    app: vod-store
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: vod-store-from-edge-only
+spec:
+  podSelector:
+    matchLabels:
+      app: vod-store
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: ott-edge
+      ports:
+        - port: 8080

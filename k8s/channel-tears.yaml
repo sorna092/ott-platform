@@ -1,0 +1,105 @@
+# Channel "tears": packager (ffmpeg) + origin (nginx) in ONE pod, sharing /hls
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ch-tears
+  labels:
+    app: ott-origin
+    channel: tears
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: ott-origin
+      channel: tears
+  template:
+    metadata:
+      labels:
+        app: ott-origin
+        channel: tears
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: packager
+          image: sorna724/ott-packager:1.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: SOURCE_URL
+              value: "https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8"
+          securityContext:
+            runAsUser: 10001
+            runAsGroup: 10001
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+          livenessProbe:
+            exec:
+              command: ["sh", "-c", "test -n \"$(find /hls/index.m3u8 -mmin -1 2>/dev/null)\""]
+            initialDelaySeconds: 90
+            periodSeconds: 30
+          volumeMounts:
+            - name: hls
+              mountPath: /hls
+        - name: origin
+          image: nginxinc/nginx-unprivileged:1.27-alpine
+          ports:
+            - name: http
+              containerPort: 8080
+          securityContext:
+            runAsUser: 101
+            runAsGroup: 101
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 20m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          readinessProbe:
+            httpGet: { path: /index.m3u8, port: http }
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 20
+          volumeMounts:
+            - name: hls
+              mountPath: /hls
+              readOnly: true
+            - name: origin-conf
+              mountPath: /etc/nginx/conf.d
+      volumes:
+        - name: hls
+          emptyDir:
+            sizeLimit: 500Mi
+        - name: origin-conf
+          configMap:
+            name: origin-conf
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ch-tears
+  labels:
+    app: ott-origin
+    channel: tears
+spec:
+  selector:
+    app: ott-origin
+    channel: tears
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

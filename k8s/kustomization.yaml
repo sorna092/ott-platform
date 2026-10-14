@@ -1,0 +1,33 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: ott
+resources:
+  - namespace.yaml
+  - channel-live.yaml
+  - channel-bunny.yaml
+  - channel-tears.yaml
+  - edge.yaml
+  - web.yaml
+  - ingress.yaml
+  - networkpolicy.yaml
+  - vod-store.yaml
+
+# ConfigMaps built from files. Kustomize adds a content hash to each name,
+# so editing a file automatically rolls out the pods that use it.
+configMapGenerator:
+  - name: origin-conf
+    files:
+      - default.conf=config/origin.conf
+  - name: edge-conf
+    files:
+      - default.conf=config/edge.conf
+  - name: web-conf
+    files:
+      - default.conf=config/web.conf
+  - name: vod-conf
+    files:
+      - default.conf=config/vod.conf
+  - name: web-site
+    files:
+      - web/index.html
+      - web/channels.json

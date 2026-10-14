@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LabTV</title>
+<style>
+  :root {
+    --bg: #0b0f17; --panel: #131a26; --line: #222c3d; --text: #e8edf5;
+    --muted: #93a1b8; --accent: #e5484d; --accent2: #2dd4bf;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font-family: "Segoe UI", system-ui, -apple-system, sans-serif; }
+  header { display: flex; align-items: center; justify-content: space-between;
+           padding: 14px 24px; border-bottom: 1px solid var(--line); background: #0e131d; }
+  .logo { font-size: 22px; font-weight: 800; letter-spacing: .5px; }
+  .logo span { color: var(--accent); }
+  .tag { font-size: 12px; color: var(--muted); }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 20px;
+         padding: 20px 24px; max-width: 1400px; margin: 0 auto; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .player { background: #000; border-radius: 12px; overflow: hidden; aspect-ratio: 16 / 9; }
+  video { width: 100%; height: 100%; display: block; background: #000; }
+  .now { margin-top: 14px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+  .now h1 { margin: 0; font-size: 22px; }
+  .live { background: var(--accent); color: #fff; font-size: 11px; font-weight: 700;
+          padding: 3px 8px; border-radius: 4px; letter-spacing: 1px; }
+  .desc { color: var(--muted); margin: 6px 0 0; }
+  .stats { margin-top: 10px; font: 12px/1.6 ui-monospace, Consolas, monospace; color: var(--muted); }
+  .status { margin-top: 8px; color: #f5a524; min-height: 20px; font-size: 14px; }
+  aside h2 { margin: 0 0 12px; font-size: 13px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); }
+  .list { display: flex; flex-direction: column; gap: 10px; }
+  .ch { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; cursor: pointer;
+        background: var(--panel); border: 1px solid var(--line); color: var(--text);
+        border-radius: 10px; padding: 12px; font: inherit; min-height: 64px; }
+  .ch:hover { border-color: #3a4a66; }
+  .ch[aria-current="true"] { border-color: var(--accent2); box-shadow: 0 0 0 1px var(--accent2) inset; }
+  .badge { width: 44px; height: 44px; border-radius: 8px; display: grid; place-items: center;
+           background: #1d2636; font-weight: 800; font-size: 18px; color: var(--accent2); flex: none; }
+  .ch b { display: block; font-size: 15px; }
+  .ch small { color: var(--muted); }
+  .movies { margin-top: 28px; }
+  .movies h2 { margin: 0 0 12px; font-size: 13px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 14px; }
+  .movie { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden;
+           cursor: pointer; padding: 0; color: var(--text); text-align: left; font: inherit; }
+  .movie:hover { border-color: #3a4a66; }
+  .movie[aria-current="true"] { border-color: var(--accent2); box-shadow: 0 0 0 1px var(--accent2) inset; }
+  .movie img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; display: block; background: #1d2636; }
+  .movie span { display: block; padding: 10px 12px; }
+  .movie b { display: block; font-size: 14px; }
+  .movie small { color: var(--muted); }
+  .empty { color: var(--muted); font-size: 14px; }
+  .kind.vod { background: #3b4a63; }
+  footer { text-align: center; color: var(--muted); font-size: 12px; padding: 24px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">Lab<span>TV</span></div>
+  <div class="tag">HA Kubernetes OTT lab · public test streams</div>
+</header>
+
+<main>
+  <section>
+    <div class="player"><video id="video" controls muted playsinline></video></div>
+    <div class="now">
+      <h1 id="title">Loading…</h1>
+      <span class="live kind" id="kind">LIVE</span>
+    </div>
+    <p class="desc" id="desc"></p>
+    <div class="status" id="status" role="status"></div>
+    <div class="stats" id="stats"></div>
+
+    <div class="movies">
+      <h2>Movies</h2>
+      <div class="grid" id="movies"><p class="empty">Loading movies…</p></div>
+    </div>
+  </section>
+
+  <aside>
+    <h2>Channels</h2>
+    <div class="list" id="list"></div>
+  </aside>
+</main>
+
+<footer>Served by Traefik → nginx edge cache → live origins / VOD store · deployed with Argo CD</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
+<script>
+  const video = document.getElementById('video');
+  const list = document.getElementById('list');
+  const statusEl = document.getElementById('status');
+  let hls = null;
+  let current = null;
+  let retryTimer = null;
+
+  function setStatus(msg) { statusEl.textContent = msg || ''; }
+
+  function render(channels) {
+    list.innerHTML = '';
+    channels.forEach((ch) => {
+      const btn = document.createElement('button');
+      btn.className = 'ch';
+      btn.type = 'button';
+      btn.dataset.key = 'live:' + ch.id;
+      const badge = document.createElement('span');
+      badge.className = 'badge';
+      badge.textContent = ch.name.charAt(0).toUpperCase();
+      const text = document.createElement('span');
+      const name = document.createElement('b');
+      name.textContent = ch.name;
+      const cat = document.createElement('small');
+      cat.textContent = ch.category;
+      text.append(name, cat);
+      btn.append(badge, text);
+      btn.addEventListener('click', () => play(ch));
+      list.appendChild(btn);
+    });
+  }
+
+  function play(ch) {
+    current = ch;
+    clearTimeout(retryTimer);
+    document.getElementById('title').textContent = ch.name;
+    document.getElementById('desc').textContent = ch.description || '';
+    const isVod = ch.kind === 'vod';
+    const kind = document.getElementById('kind');
+    kind.textContent = isVod ? 'MOVIE' : 'LIVE';
+    kind.classList.toggle('vod', isVod);
+    document.querySelectorAll('.ch, .movie').forEach((b) =>
+      b.setAttribute('aria-current', b.dataset.key === (ch.kind || 'live') + ':' + ch.id ? 'true' : 'false'));
+    setStatus('Connecting…');
+
+    if (hls) { hls.destroy(); hls = null; }
+
+    if (window.Hls && Hls.isSupported()) {
+      hls = new Hls({ liveSyncDurationCount: 3, enableWorker: true });
+      hls.loadSource(ch.url);
+      hls.attachMedia(video);
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        setStatus('');
+        video.play().catch(() => setStatus('Press play to start.'));
+      });
+      hls.on(Hls.Events.ERROR, (_e, data) => {
+        if (data.fatal) {
+          setStatus('Stream unavailable (' + data.details + '). Retrying in 5 s…');
+          hls.destroy(); hls = null;
+          retryTimer = setTimeout(() => { if (current && current.id === ch.id) play(ch); }, 5000);
+        }
+      });
+    } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      video.src = ch.url;          // Safari / iOS play HLS natively
+      video.play().catch(() => setStatus('Press play to start.'));
+      setStatus('');
+    } else {
+      setStatus('This browser cannot play HLS.');
+    }
+  }
+
+  setInterval(() => {
+    const b = video.buffered;
+    const ahead = b.length ? (b.end(b.length - 1) - video.currentTime) : 0;
+    const res = video.videoWidth ? video.videoWidth + 'x' + video.videoHeight : '-';
+    const level = hls && hls.levels && hls.currentLevel >= 0 ? hls.levels[hls.currentLevel] : null;
+    const kbps = level && level.bitrate ? Math.round(level.bitrate / 1000) + ' kbps' : '-';
+    document.getElementById('stats').textContent =
+      'resolution ' + res + ' · bitrate ' + kbps + ' · buffer ' + ahead.toFixed(1) + ' s';
+  }, 1000);
+
+  function fmtDuration(sec) {
+    const m = Math.round((sec || 0) / 60);
+    return m >= 60 ? Math.floor(m / 60) + ' h ' + (m % 60) + ' min' : m + ' min';
+  }
+
+  function renderMovies(movies) {
+    const grid = document.getElementById('movies');
+    grid.innerHTML = '';
+    if (!movies.length) {
+      const p = document.createElement('p');
+      p.className = 'empty';
+      p.textContent = 'No movies yet. Upload one with scripts/upload-movie.sh';
+      grid.appendChild(p);
+      return;
+    }
+    movies.forEach((m) => {
+      const item = Object.assign({ kind: 'vod', description: 'Movie · ' + fmtDuration(m.duration) }, m);
+      const btn = document.createElement('button');
+      btn.className = 'movie';
+      btn.type = 'button';
+      btn.dataset.key = 'vod:' + m.id;
+      const img = document.createElement('img');
+      img.src = m.poster;
+      img.alt = m.title + ' poster';
+      img.loading = 'lazy';
+      const text = document.createElement('span');
+      const name = document.createElement('b');
+      name.textContent = m.title;
+      const meta = document.createElement('small');
+      meta.textContent = fmtDuration(m.duration);
+      text.append(name, meta);
+      btn.append(img, text);
+      btn.addEventListener('click', () => play(item));
+      grid.appendChild(btn);
+    });
+  }
+
+  fetch('/vod/catalog.json', { cache: 'no-store' })
+    .then((r) => (r.ok ? r.json() : []))
+    .then(renderMovies)
+    .catch(() => renderMovies([]));
+
+  fetch('channels.json', { cache: 'no-store' })
+    .then((r) => r.json())
+    .then((channels) => { render(channels); if (channels.length) play(channels[0]); })
+    .catch(() => setStatus('Could not load the channel list.'));
+</script>
+</body>
+</html>

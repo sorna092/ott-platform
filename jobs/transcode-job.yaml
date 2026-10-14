@@ -1,0 +1,64 @@
+# Template used by scripts/upload-movie.sh (NOT applied by Argo CD).
+# __ID__ and __TITLE__ are replaced by the script.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: transcode-__ID__
+  namespace: ott
+  labels:
+    app: ott-transcode
+    movie: __ID__
+spec:
+  backoffLimit: 1
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app: ott-transcode
+        movie: __ID__
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
+        fsGroup: 101
+        seccompProfile:
+          type: RuntimeDefault
+      # The volume is ReadWriteOnce: run on the SAME node as vod-store
+      affinity:
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: vod-store
+              topologyKey: kubernetes.io/hostname
+      containers:
+        - name: transcode
+          image: sorna724/ott-transcoder:1.0
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: MOVIE_ID
+              value: "__ID__"
+            - name: MOVIE_TITLE
+              value: "__TITLE__"
+            - name: INPUT_FILE
+              value: "__ID__.mp4"
+          resources:
+            requests:
+              cpu: "1"
+              memory: 512Mi
+            limits:
+              cpu: "3"
+              memory: 2Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: vod-data

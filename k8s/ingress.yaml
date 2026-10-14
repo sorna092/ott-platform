@@ -1,0 +1,32 @@
+# tv.lab.local: "/" -> player page, "/live" and "/vod" -> edge cache
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ott
+spec:
+  ingressClassName: traefik
+  rules:
+    - host: tv.lab.local
+      http:
+        paths:
+          - path: /live
+            pathType: Prefix
+            backend:
+              service:
+                name: ott-edge
+                port:
+                  name: http
+          - path: /vod
+            pathType: Prefix
+            backend:
+              service:
+                name: ott-edge
+                port:
+                  name: http
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ott-web
+                port:
+                  name: http

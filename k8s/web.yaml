@@ -1,0 +1,68 @@
+# Web frontend: player page + channel list
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ott-web
+  labels:
+    app: ott-web
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ott-web
+  template:
+    metadata:
+      labels:
+        app: ott-web
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: nginx
+          image: nginxinc/nginx-unprivileged:1.27-alpine
+          ports:
+            - name: http
+              containerPort: 8080
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 20m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 5
+          volumeMounts:
+            - name: web-conf
+              mountPath: /etc/nginx/conf.d
+            - name: site
+              mountPath: /usr/share/nginx/html
+      volumes:
+        - name: web-conf
+          configMap:
+            name: web-conf
+        - name: site
+          configMap:
+            name: web-site
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ott-web
+  labels:
+    app: ott-web
+spec:
+  selector:
+    app: ott-web
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

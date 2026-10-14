@@ -1,0 +1,97 @@
+# Edge cache: nginx with proxy_cache in front of all channel origins
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ott-edge
+  labels:
+    app: ott-edge
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ott-edge
+  template:
+    metadata:
+      labels:
+        app: ott-edge
+    spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: ott-edge
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: nginx
+          image: nginxinc/nginx-unprivileged:1.27-alpine
+          ports:
+            - name: http
+              containerPort: 8080
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 100m
+              memory: 64Mi
+            limits:
+              memory: 512Mi
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 20
+          volumeMounts:
+            - name: edge-conf
+              mountPath: /etc/nginx/conf.d
+            - name: cache
+              mountPath: /cache
+      volumes:
+        - name: edge-conf
+          configMap:
+            name: edge-conf
+        - name: cache
+          emptyDir:
+            sizeLimit: 2Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ott-edge
+  labels:
+    app: ott-edge
+spec:
+  selector:
+    app: ott-edge
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ott-edge
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ott-edge
+  minReplicas: 2
+  maxReplicas: 4
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70

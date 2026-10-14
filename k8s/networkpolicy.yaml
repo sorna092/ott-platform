@@ -1,0 +1,17 @@
+# Channel origins accept traffic ONLY from the edge cache (viewers can never hit them directly)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: origin-from-edge-only
+spec:
+  podSelector:
+    matchLabels:
+      app: ott-origin
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app: ott-edge
+      ports:
+        - port: 8080
